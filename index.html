@@ -32,6 +32,34 @@
         .btn { width: calc(100% - 40px); margin: 20px; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-save { background: var(--accent); color: white; }
         .btn-export { background: #28a745; color: white; margin-top: 0; }
+
+        /* Update your CSS with this */
+        #properties-panel { 
+            width: 300px; 
+            background: var(--sidebar-bg); 
+            display: flex; 
+            flex-direction: column; 
+            border-left: 1px solid #333; 
+            height: 100vh; /* Asegura que ocupe todo el alto */
+        }
+
+        #editor { 
+            flex-grow: 1; 
+            overflow-y: auto; /* ESTO ACTIVA EL SCROLL */
+            padding-bottom: 20px;
+        }
+
+        /* Opcional: Hacer el scroll más fino y oscuro para que pegue con el diseño */
+        #editor::-webkit-scrollbar {
+            width: 6px;
+        }
+        #editor::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 10px;
+        }
+        #editor::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
     </style>
 </head>
 <body>
