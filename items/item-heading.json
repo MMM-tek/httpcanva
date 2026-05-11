@@ -1,0 +1,10 @@
+{
+  "tag": "h1",
+  "defaultText": "New Heading",
+  "styles": {
+    "margin": "0",
+    "font-size": "32px",
+    "color": "#333",
+    "font-weight": "bold"
+  }
+}
