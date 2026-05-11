@@ -1,0 +1,10 @@
+{
+  "tag": "input",
+  "defaultText": "",
+  "styles": {
+    "padding": "8px",
+    "border": "1px solid #ccc",
+    "border-radius": "4px",
+    "width": "200px"
+  }
+}
