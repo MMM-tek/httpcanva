@@ -1,0 +1,4 @@
+[
+  { "id": "button", "name": "Classic Button" },
+  { "id": "input", "name": "Text Input" }
+]
