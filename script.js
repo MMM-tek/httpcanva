@@ -47,19 +47,31 @@ function createNewScene() {
 }
 
 function switchScene(id) {
-    updateCurrentSceneData();
+    // Si hay una escena activa, guardamos su estado antes de cambiar
+    if (currentSceneId) {
+        updateCurrentSceneData();
+    }
+
     currentSceneId = id;
     const s = project.scenes.find(x => x.id === id);
-    canvas.innerHTML = s.html;
-    canvas.style.backgroundColor = s.bg;
-    document.getElementById('js-editor').value = s.js;
-    document.getElementById('scene-name-input').value = s.name;
-    document.getElementById('canvas-bg').value = s.bg;
     
+    // Si por alguna razón no encuentra la escena (ej. al cargar archivo), salimos
+    if (!s) return;
+
+    // Cargar datos en el editor
+    canvas.innerHTML = s.html;
+    canvas.style.backgroundColor = s.bg || "#ffffff";
+    document.getElementById('js-editor').value = s.js || "";
+    document.getElementById('scene-name-input').value = s.name || "";
+    document.getElementById('canvas-bg').value = s.bg || "#ffffff";
+    
+    // Activar movimiento en los objetos que ya existían
     canvas.querySelectorAll('.dropped').forEach(el => attachMovement(el));
+    
     renderTabs();
-    select(null);
+    select(null); // Deseleccionar cualquier objeto
 }
+
 
 function updateCurrentSceneData() {
     if (!currentSceneId) return;
