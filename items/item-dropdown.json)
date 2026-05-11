@@ -1,0 +1,13 @@
+{
+  "tag": "select",
+  "name": "Dropdown Menu",
+  "options": ["Option 1", "Option 2", "Option 3"],
+  "styles": {
+    "padding": "8px",
+    "border-radius": "4px",
+    "border": "1px solid #ccc",
+    "background": "white",
+    "width": "150px",
+    "cursor": "pointer"
+  }
+}
