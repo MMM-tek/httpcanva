@@ -5,62 +5,99 @@ const propEditor = document.getElementById('editor');
 const noSelection = document.getElementById('no-selection');
 const customCssArea = document.getElementById('custom-css-area');
 const liveStyles = document.getElementById('live-custom-css');
-const canvasBgInput = document.getElementById('canvas-bg-input');
-const previewBtn = document.getElementById('preview-mode-btn');
+const sceneJsArea = document.getElementById('scene-js-area');
+const sceneNameInput = document.getElementById('scene-name-input');
 
+let scenes = []; 
+let currentSceneId = null;
 let selectedElement = null;
-let isPreview = false;
 
-// 1. LOAD ASSETS & DYNAMIC PREVIEWS
+// 1. SCENE ENGINE
+function createNewScene() {
+    const id = Date.now();
+    const newScene = {
+        id: id,
+        name: "Scene " + (scenes.length + 1),
+        html: "",
+        js: "",
+        bg: "#ffffff",
+        isFirst: scenes.length === 0
+    };
+    scenes.push(newScene);
+    renderTabs();
+    switchScene(id);
+}
+
+function renderTabs() {
+    const container = document.getElementById('tabs-container');
+    container.innerHTML = '';
+    scenes.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = `tab-btn ${s.id === currentSceneId ? 'active' : ''}`;
+        btn.innerText = s.name + (s.isFirst ? " ★" : "");
+        btn.onclick = () => switchScene(s.id);
+        container.appendChild(btn);
+    });
+}
+
+function switchScene(id) {
+    if (currentSceneId) {
+        const prev = scenes.find(s => s.id === currentSceneId);
+        prev.html = canvas.innerHTML;
+        prev.js = sceneJsArea.value;
+        prev.bg = document.getElementById('canvas-bg-input').value;
+    }
+
+    currentSceneId = id;
+    const scene = scenes.find(s => s.id === id);
+    
+    canvas.innerHTML = scene.html;
+    sceneJsArea.value = scene.js;
+    sceneNameInput.value = scene.name;
+    document.getElementById('canvas-bg-input').value = scene.bg;
+    canvas.style.backgroundColor = scene.bg;
+    
+    canvas.querySelectorAll('.dropped').forEach(el => initSafeDrag(el));
+    renderTabs();
+    selectElement(null);
+}
+
+// 2. LOAD ASSETS WITH PREVIEW
 async function loadMenu() {
     try {
-        const response = await fetch('items/items.json');
+        const response = await fetch('./items/items.json');
         const items = await response.json();
         renderMenu(items);
-        
         searchInput.oninput = (e) => {
             const term = e.target.value.toLowerCase();
             renderMenu(items.filter(i => i.name.toLowerCase().includes(term)));
         };
-    } catch (e) {
-        console.error("Error loading JSON. Use Live Server.", e);
-    }
+    } catch (e) { console.error("JSON Path Error: Use Live Server/GitHub.", e); }
 }
 
 async function renderMenu(items) {
     itemsList.innerHTML = '';
     for (const item of items) {
-        const res = await fetch(`items/item-${item.id}.json`);
+        const res = await fetch(`./items/item-${item.id}.json`);
         const config = await res.json();
-
         const container = document.createElement('div');
         container.className = 'item-container';
         container.draggable = true;
-        container.dataset.json = `items/item-${item.id}.json`;
-
-        const previewBox = document.createElement('div');
-        previewBox.className = 'preview-box';
         
-        // Mini preview logic
-        let previewEl = document.createElement(config.tag);
-        if (config.tag === 'img') previewEl.src = "https://placeholder.com";
-        else if (config.tag === 'select') previewEl.innerHTML = "<option>Dropdown</option>";
-        else previewEl.innerText = config.defaultText || 'Text';
-        
-        if (config.styles) Object.assign(previewEl.style, config.styles);
-        previewBox.appendChild(previewEl);
-
         container.innerHTML = `<div class="item-label">${item.name}</div>`;
-        container.appendChild(previewBox);
-        container.ondragstart = (e) => e.dataTransfer.setData('configPath', container.dataset.json);
+        const pBox = document.createElement('div');
+        pBox.className = 'preview-box';
+        pBox.innerHTML = config.tag === 'img' ? 'IMAGE' : (config.tag === 'select' ? 'DROPDOWN' : config.defaultText);
+        
+        container.appendChild(pBox);
+        container.ondragstart = (e) => e.dataTransfer.setData('configPath', `./items/item-${item.id}.json`);
         itemsList.appendChild(container);
     }
 }
 
-// 2. CREATE ON CANVAS
+// 3. CANVAS LOGIC
 canvas.ondragover = (e) => e.preventDefault();
 canvas.ondrop = async (e) => {
-    if (isPreview) return;
     e.preventDefault();
     const configPath = e.dataTransfer.getData('configPath');
     const response = await fetch(configPath);
@@ -68,161 +105,121 @@ canvas.ondrop = async (e) => {
 
     const el = document.createElement(config.tag);
     el.className = 'dropped';
-    
-    if (config.tag === 'select') {
-        updateSelectOptions(el, "Option 1 / Option 2");
-    } else if (config.tag === 'img') {
-        el.src = "https://placeholder.com";
-    } else {
-        el.innerText = config.defaultText || '';
-    }
+    if(config.tag === 'select') updateSelectOptions(el, "Option 1/Option 2");
+    else if(config.tag === 'img') el.src = "https://placeholder.com";
+    else el.innerText = config.defaultText || '';
 
     el.style.left = (e.clientX - canvas.offsetLeft) + 'px';
     el.style.top = (e.clientY - canvas.offsetTop) + 'px';
-    el.style.width = config.styles?.width || "150px";
-    el.style.zIndex = "1";
+    el.style.width = config.styles?.width || "120px";
     el.style.position = "absolute";
-    if (config.styles) Object.assign(el.style, config.styles);
+    if(config.styles) Object.assign(el.style, config.styles);
 
     initSafeDrag(el);
     canvas.appendChild(el);
     selectElement(el);
 };
 
-// 3. SAFE DRAG (Independent for every object)
 function initSafeDrag(el) {
     let isMoving = false;
     let offset = { x: 0, y: 0 };
 
-    el.addEventListener('mousedown', (e) => {
-        if (isPreview) return;
+    el.onmousedown = (e) => {
         e.stopPropagation();
         selectElement(el);
-        
         isMoving = true;
         const rect = el.getBoundingClientRect();
         offset.x = e.clientX - rect.left;
         offset.y = e.clientY - rect.top;
-        el.style.opacity = "0.7";
-    });
+    };
 
     window.addEventListener('mousemove', (e) => {
         if (!isMoving) return;
-        const canvasRect = canvas.getBoundingClientRect();
-        el.style.left = (e.clientX - canvasRect.left - offset.x) + 'px';
-        el.style.top = (e.clientY - canvasRect.top - offset.y) + 'px';
+        el.style.left = (e.clientX - canvas.offsetLeft - offset.x) + 'px';
+        el.style.top = (e.clientY - canvas.offsetTop - offset.y) + 'px';
         updateInputs(el);
     });
 
-    window.addEventListener('mouseup', () => {
-        isMoving = false;
-        el.style.opacity = "1";
-    });
+    window.addEventListener('mouseup', () => isMoving = false);
 }
 
-// 4. PROPERTIES & SMART DROPDOWN
+// 4. PROPERTIES
 function selectElement(el) {
     if (selectedElement) selectedElement.classList.remove('selected');
     selectedElement = el;
-    el.classList.add('selected');
-    propEditor.style.display = 'block';
-    noSelection.style.display = 'none';
-    updateInputs(el);
+    if (el) {
+        el.classList.add('selected');
+        propEditor.style.display = 'block';
+        noSelection.style.display = 'none';
+        updateInputs(el);
+    } else {
+        propEditor.style.display = 'none';
+        noSelection.style.display = 'block';
+    }
 }
 
 function updateInputs(el) {
     document.getElementById('prop-id').value = el.id || '';
-    if (el.tagName === 'SELECT') {
-        document.getElementById('prop-text').value = Array.from(el.options).map(o => o.text).join(' / ');
-    } else {
-        document.getElementById('prop-text').value = el.innerText || '';
-    }
+    document.getElementById('prop-text').value = el.tagName === 'SELECT' ? Array.from(el.options).map(o => o.text).join('/') : el.innerText;
     document.getElementById('prop-w').value = el.offsetWidth;
     document.getElementById('prop-h').value = el.offsetHeight;
-    document.getElementById('prop-z').value = el.style.zIndex;
-}
-
-function updateSelectOptions(el, textValue) {
-    if (el.tagName !== 'SELECT') return;
-    el.innerHTML = '';
-    textValue.split('/').forEach(optText => {
-        const opt = document.createElement('option');
-        opt.innerText = optText.trim();
-        el.appendChild(opt);
-    });
+    document.getElementById('prop-z').value = el.style.zIndex || 1;
 }
 
 document.getElementById('save-btn').onclick = () => {
     if (!selectedElement) return;
     const textVal = document.getElementById('prop-text').value;
     selectedElement.id = document.getElementById('prop-id').value;
+    if (selectedElement.tagName === 'SELECT') updateSelectOptions(selectedElement, textVal);
+    else if (selectedElement.tagName !== 'IMG') selectedElement.innerText = textVal;
     
-    if (selectedElement.tagName === 'SELECT') {
-        updateSelectOptions(selectedElement, textVal);
-    } else if (selectedElement.tagName !== 'IMG') {
-        selectedElement.innerText = textVal;
-    }
     selectedElement.style.width = document.getElementById('prop-w').value + 'px';
     selectedElement.style.height = document.getElementById('prop-h').value + 'px';
     selectedElement.style.zIndex = document.getElementById('prop-z').value;
 };
 
-// 5. LIVE CSS & CANVAS BG
-canvasBgInput.oninput = (e) => canvas.style.backgroundColor = e.target.value;
+function updateSelectOptions(el, val) {
+    el.innerHTML = '';
+    val.split('/').forEach(o => {
+        const opt = document.createElement('option');
+        opt.innerText = o.trim();
+        el.appendChild(opt);
+    });
+}
+
+// 5. PREVIEW & EXPORT
+document.getElementById('preview-mode-btn').onclick = () => {
+    // Save state
+    const current = scenes.find(s => s.id === currentSceneId);
+    current.html = canvas.innerHTML;
+    current.js = sceneJsArea.value;
+
+    const scenesData = {};
+    scenes.forEach(s => scenesData[s.name] = { html: s.html, js: s.js, bg: s.bg });
+
+    const win = window.open();
+    win.document.write(`
+        <html><head><style>body{margin:0; overflow:hidden;} .view{width:100vw;height:100vh;position:relative;} ${customCssArea.value}</style></head>
+        <body><div id="app" class="view"></div>
+        <script>
+            const scns = ${JSON.stringify(scenesData)};
+            function goToScene(name) {
+                const s = scns[name];
+                const app = document.getElementById('app');
+                app.innerHTML = s.html;
+                app.style.backgroundColor = s.bg;
+                document.body.style.backgroundColor = s.bg;
+                try { eval(s.js); } catch(e) { console.error(e); }
+            }
+            goToScene("${scenes.find(s => s.isFirst).name}");
+        <\/script></body></html>
+    `);
+};
+
+// Global Events
 customCssArea.oninput = (e) => liveStyles.innerHTML = e.target.value;
+sceneNameInput.oninput = (e) => { scenes.find(s => s.id === currentSceneId).name = e.target.value; renderTabs(); };
+window.onkeydown = (e) => { if((e.key === "Delete") && selectedElement && document.activeElement.tagName !== 'INPUT') { selectedElement.remove(); selectElement(null); } };
 
-// 6. PREVIEW MODE
-previewBtn.onclick = function() {
-    isPreview = !isPreview;
-    this.innerText = isPreview ? "Preview Mode: ON" : "Preview Mode: OFF";
-    this.style.background = isPreview ? "#dc3545" : "#6f42c1";
-    
-    if (selectedElement) selectedElement.classList.remove('selected');
-    selectedElement = null;
-    propEditor.style.display = 'none';
-    noSelection.style.display = 'block';
-
-    canvas.querySelectorAll('.dropped').forEach(el => {
-        el.style.cursor = isPreview ? "default" : "move";
-        el.style.outline = isPreview ? "none" : "1px dashed #ccc";
-    });
-};
-
-// 7. GLOBAL CONTROLS (DELETE & EXPORT)
-window.onkeydown = (e) => {
-    if ((e.key === "Delete" || e.key === "Backspace") && selectedElement && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-        selectedElement.remove();
-        propEditor.style.display = 'none';
-        noSelection.style.display = 'block';
-    }
-};
-
-document.getElementById('export-btn').onclick = () => {
-    const clone = canvas.cloneNode(true);
-    clone.querySelectorAll('.dropped').forEach(el => {
-        el.classList.remove('dropped', 'selected');
-        el.style.outline = "none";
-    });
-    const finalHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { margin: 0; background: ${canvas.style.backgroundColor}; overflow: hidden; }
-        .canvas { position: relative; width: 100vw; height: 100vh; }
-        ${customCssArea.value}
-    </style>
-</head>
-<body>
-    <div class="canvas">${clone.innerHTML}</div>
-</body>
-</html>`;
-    const blob = new Blob([finalHtml], {type:'text/html'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'index.html';
-    a.click();
-};
-
+createNewScene();
 loadMenu();
