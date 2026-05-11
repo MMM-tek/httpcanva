@@ -1,4 +1,9 @@
 [
-  { "id": "button", "name": "Classic Button" },
-  { "id": "input", "name": "Text Input" }
+  { "id": "button", "name": "Action Button" },
+  { "id": "heading", "name": "Main Title (H1)" },
+  { "id": "text", "name": "Paragraph Text" },
+  { "id": "input", "name": "Text Input Field" },
+  { "id": "card", "name": "Container Card" },
+  { "id": "image", "name": "Image Placeholder" },
+  { "id": "checkbox", "name": "Selection Checkbox" }
 ]
