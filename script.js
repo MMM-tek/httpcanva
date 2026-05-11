@@ -5,7 +5,7 @@ const propEditor = document.getElementById('editor');
 const noSelection = document.getElementById('no-selection');
 let selectedElement = null;
 
-// 1. LOAD MENU WITH VISUAL PREVIEWS
+// 1. LOAD ASSETS
 async function loadMenu() {
     try {
         const response = await fetch('items/items.json');
@@ -15,30 +15,41 @@ async function loadMenu() {
             const term = e.target.value.toLowerCase();
             renderMenu(items.filter(i => i.name.toLowerCase().includes(term)));
         };
-    } catch (e) { console.error("JSON Error: Use a local server.", e); }
+    } catch (e) { console.error("Error: Use Live Server to load JSON.", e); }
 }
 
 async function renderMenu(items) {
     itemsList.innerHTML = '';
     for (const item of items) {
-        const configPath = `items/item-${item.id}.json`;
-        const res = await fetch(configPath);
+        const res = await fetch(`items/item-${item.id}.json`);
         const config = await res.json();
 
         const container = document.createElement('div');
         container.className = 'item-container';
         container.draggable = true;
-        container.dataset.json = configPath;
+        container.dataset.json = `items/item-${item.id}.json`;
 
-        // Visual Preview
+        // Preview box
         const previewBox = document.createElement('div');
         previewBox.className = 'preview-box';
-        const previewEl = document.createElement(config.tag);
-        if(config.tag === 'img') previewEl.src = "https://placeholder.com";
-        else previewEl.innerText = config.defaultText || 'Preview';
-        if(config.styles) Object.assign(previewEl.style, config.styles);
         
+        let previewEl;
+        if (config.tag === 'select') {
+            previewEl = document.createElement('div');
+            previewEl.innerText = "Dropdown ▾";
+            previewEl.style.border = "1px solid #ccc";
+            previewEl.style.padding = "5px";
+        } else if (config.tag === 'img') {
+            previewEl = document.createElement('img');
+            previewEl.src = "https://placeholder.com";
+        } else {
+            previewEl = document.createElement(config.tag);
+            previewEl.innerText = config.defaultText || 'Text';
+        }
+
+        if(config.styles) Object.assign(previewEl.style, config.styles);
         previewBox.appendChild(previewEl);
+        
         container.innerHTML = `<div class="item-label">${item.name}</div>`;
         container.appendChild(previewBox);
 
@@ -47,7 +58,7 @@ async function renderMenu(items) {
     }
 }
 
-// 2. CREATE AND DRAG LOGIC
+// 2. CREATE ON CANVAS
 canvas.ondragover = (e) => e.preventDefault();
 canvas.ondrop = async (e) => {
     e.preventDefault();
@@ -57,14 +68,24 @@ canvas.ondrop = async (e) => {
 
     const el = document.createElement(config.tag);
     el.className = 'dropped';
-    if(config.tag === 'img') el.src = "https://placeholder.com";
-    else if(config.tag === 'input' && config.type === 'checkbox') el.type = 'checkbox';
-    else el.innerText = config.defaultText || '';
+    
+    // Configuración específica por tipo
+    if (config.tag === 'select' && config.options) {
+        config.options.forEach(optText => {
+            const opt = document.createElement('option');
+            opt.value = optText;
+            opt.innerText = optText;
+            el.appendChild(opt);
+        });
+    } else if (config.tag === 'img') {
+        el.src = "https://placeholder.com";
+    } else {
+        el.innerText = config.defaultText || '';
+    }
 
     el.style.left = (e.clientX - canvas.offsetLeft) + 'px';
     el.style.top = (e.clientY - canvas.offsetTop) + 'px';
     el.style.width = config.styles?.width || "150px";
-    el.style.height = config.styles?.height || "auto";
     el.style.zIndex = "1";
     if(config.styles) Object.assign(el.style, config.styles);
 
@@ -73,7 +94,6 @@ canvas.ondrop = async (e) => {
     selectElement(el);
 };
 
-// 3. MOVE OBJECTS BY PRESSING THEM
 function makeMovable(el) {
     let isMoving = false;
     let offset = { x: 0, y: 0 };
@@ -96,7 +116,6 @@ function makeMovable(el) {
     window.onmouseup = () => isMoving = false;
 }
 
-// 4. PROPERTIES CONTROL
 function selectElement(el) {
     if (selectedElement) selectedElement.classList.remove('selected');
     selectedElement = el;
@@ -109,25 +128,23 @@ function selectElement(el) {
 function updateInputs(el) {
     document.getElementById('prop-id').value = el.id || '';
     document.getElementById('prop-text').value = el.innerText || '';
-    document.getElementById('img-path-group').style.display = el.tagName === 'IMG' ? 'block' : 'none';
-    if(el.tagName === 'IMG') document.getElementById('prop-src').value = el.src;
-    document.getElementById('prop-w').value = parseInt(el.offsetWidth);
-    document.getElementById('prop-h').value = parseInt(el.offsetHeight);
+    document.getElementById('prop-w').value = el.offsetWidth;
+    document.getElementById('prop-h').value = el.offsetHeight;
     document.getElementById('prop-z').value = el.style.zIndex;
 }
 
 document.getElementById('save-btn').onclick = () => {
     if (!selectedElement) return;
     selectedElement.id = document.getElementById('prop-id').value;
-    if(selectedElement.tagName === 'IMG') selectedElement.src = document.getElementById('prop-src').value;
-    else selectedElement.innerText = document.getElementById('prop-text').value;
-    
+    if (selectedElement.tagName !== 'IMG' && selectedElement.tagName !== 'SELECT') {
+        selectedElement.innerText = document.getElementById('prop-text').value;
+    }
     selectedElement.style.width = document.getElementById('prop-w').value + 'px';
     selectedElement.style.height = document.getElementById('prop-h').value + 'px';
     selectedElement.style.zIndex = document.getElementById('prop-z').value;
 };
 
-// 5. DELETE & EXPORT
+// EXPORT & DELETE
 window.onkeydown = (e) => {
     if ((e.key === "Delete" || e.key === "Backspace") && selectedElement && document.activeElement.tagName !== 'INPUT') {
         selectedElement.remove();
@@ -138,11 +155,8 @@ window.onkeydown = (e) => {
 
 document.getElementById('export-btn').onclick = () => {
     const clone = canvas.cloneNode(true);
-    clone.querySelectorAll('.dropped').forEach(el => {
-        el.classList.remove('dropped', 'selected');
-        el.style.position = 'absolute';
-    });
-    const html = `<!DOCTYPE html><html><head><style>body{margin:0; position:relative; overflow:hidden;}</style></head><body>${clone.innerHTML}</body></html>`;
+    clone.querySelectorAll('.dropped').forEach(el => el.classList.remove('dropped', 'selected'));
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0;overflow:hidden;position:relative;}</style></head><body>${clone.innerHTML}</body></html>`;
     const blob = new Blob([html], {type:'text/html'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
