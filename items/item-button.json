@@ -1,0 +1,11 @@
+{
+  "tag": "button",
+  "defaultText": "Click Me",
+  "styles": {
+    "padding": "10px 20px",
+    "background-color": "#0078d4",
+    "color": "white",
+    "border": "none",
+    "border-radius": "5px"
+  }
+}
