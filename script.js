@@ -5,21 +5,17 @@ const propEditor = document.getElementById('editor');
 const noSelection = document.getElementById('no-selection');
 let selectedElement = null;
 
-// 1. LOAD MENU FROM JSON
+// 1. LOAD ASSETS
 async function loadMenu() {
     try {
         const response = await fetch('items/items.json');
         const items = await response.json();
         renderMenu(items);
-        
         searchInput.oninput = (e) => {
             const term = e.target.value.toLowerCase();
-            const filtered = items.filter(i => i.name.toLowerCase().includes(term));
-            renderMenu(filtered);
+            renderMenu(items.filter(i => i.name.toLowerCase().includes(term)));
         };
-    } catch (e) { 
-        console.error("Error loading items.json. Use a local server (Live Server).", e); 
-    }
+    } catch (e) { console.error("Run a local server to load JSON files.", e); }
 }
 
 function renderMenu(items) {
@@ -30,52 +26,79 @@ function renderMenu(items) {
         div.draggable = true;
         div.innerText = item.name;
         div.dataset.json = `items/item-${item.id}.json`;
-        
-        div.ondragstart = (e) => {
-            e.dataTransfer.setData('configPath', div.dataset.json);
-        };
+        div.ondragstart = (e) => e.dataTransfer.setData('configPath', div.dataset.json);
         itemsList.appendChild(div);
     });
 }
 
-// 2. DRAG & DROP LOGIC
+// 2. CREATE ELEMENT ON CANVAS
 canvas.ondragover = (e) => e.preventDefault();
-
 canvas.ondrop = async (e) => {
     e.preventDefault();
     const configPath = e.dataTransfer.getData('configPath');
-    if (!configPath) return;
+    const response = await fetch(configPath);
+    const config = await response.json();
 
-    try {
-        const response = await fetch(configPath);
-        const config = await response.json();
-
-        const el = document.createElement(config.tag);
-        el.className = 'dropped';
+    const el = document.createElement(config.tag);
+    el.className = 'dropped';
+    if(config.tag === 'img') {
+        el.src = "https://placeholder.com";
+        el.style.objectFit = "cover";
+    } else if(config.tag === 'input' && config.type === 'checkbox') {
+        el.type = 'checkbox';
+    } else {
         el.innerText = config.defaultText || '';
-        
-        const rect = canvas.getBoundingClientRect();
-        el.style.left = (e.clientX - rect.left) + 'px';
-        el.style.top = (e.clientY - rect.top) + 'px';
-        el.style.zIndex = "1";
-
-        if (config.styles) Object.assign(el.style, config.styles);
-
-        el.onclick = (event) => {
-            event.stopPropagation();
-            openProperties(el);
-        };
-
-        canvas.appendChild(el);
-        openProperties(el);
-
-    } catch (err) {
-        console.error("Error loading item configuration:", err);
     }
+
+    el.style.left = (e.clientX - canvas.offsetLeft) + 'px';
+    el.style.top = (e.clientY - canvas.offsetTop) + 'px';
+    el.style.width = "150px"; 
+    el.style.height = "auto";
+    el.style.zIndex = "1";
+    if(config.styles) Object.assign(el.style, config.styles);
+
+    // Add resize handle
+    const resizer = document.createElement('div');
+    resizer.className = 'resizer';
+    el.appendChild(resizer);
+
+    makeElementInteractable(el);
+    canvas.appendChild(el);
+    selectElement(el);
 };
 
-// 3. PROPERTIES SYSTEM
-function openProperties(el) {
+// 3. INTERACTIVITY (DRAG & RESIZE)
+function makeElementInteractable(el) {
+    let isDragging = false;
+    let isResizing = false;
+
+    el.onmousedown = (e) => {
+        e.stopPropagation();
+        selectElement(el);
+        if (e.target.className === 'resizer') {
+            isResizing = true;
+        } else {
+            isDragging = true;
+        }
+    };
+
+    window.onmousemove = (e) => {
+        if (isDragging) {
+            el.style.left = (e.clientX - canvas.offsetLeft - el.offsetWidth/2) + 'px';
+            el.style.top = (e.clientY - canvas.offsetTop - el.offsetHeight/2) + 'px';
+            updatePropInputs(el);
+        } else if (isResizing) {
+            el.style.width = (e.clientX - el.getBoundingClientRect().left) + 'px';
+            el.style.height = (e.clientY - el.getBoundingClientRect().top) + 'px';
+            updatePropInputs(el);
+        }
+    };
+
+    window.onmouseup = () => { isDragging = false; isResizing = false; };
+}
+
+// 4. PROPERTIES PANEL
+function selectElement(el) {
     if (selectedElement) selectedElement.classList.remove('selected');
     selectedElement = el;
     el.classList.add('selected');
@@ -83,81 +106,53 @@ function openProperties(el) {
     propEditor.style.display = 'block';
     noSelection.style.display = 'none';
     
+    // Show/Hide Image Path field
+    document.getElementById('img-path-group').style.display = el.tagName === 'IMG' ? 'block' : 'none';
+    updatePropInputs(el);
+}
+
+function updatePropInputs(el) {
     document.getElementById('prop-id').value = el.id || '';
     document.getElementById('prop-text').value = el.innerText || '';
-    document.getElementById('prop-zindex').value = el.style.zIndex || 1;
-    document.getElementById('prop-x').value = parseInt(el.style.left) || 0;
-    document.getElementById('prop-y').value = parseInt(el.style.top) || 0;
+    document.getElementById('prop-src').value = el.src || '';
+    document.getElementById('prop-w').value = parseInt(el.style.width);
+    document.getElementById('prop-h').value = parseInt(el.style.height);
+    document.getElementById('prop-z').value = el.style.zIndex;
 }
 
 document.getElementById('save-btn').onclick = () => {
-    if (selectedElement) {
-        selectedElement.id = document.getElementById('prop-id').value;
-        if (selectedElement.tagName !== 'INPUT') {
-            selectedElement.innerText = document.getElementById('prop-text').value;
-        } else {
-            selectedElement.placeholder = document.getElementById('prop-text').value;
-        }
-        selectedElement.style.zIndex = document.getElementById('prop-zindex').value;
-        selectedElement.style.left = document.getElementById('prop-x').value + 'px';
-        selectedElement.style.top = document.getElementById('prop-y').value + 'px';
+    if (!selectedElement) return;
+    selectedElement.id = document.getElementById('prop-id').value;
+    if(selectedElement.tagName === 'IMG') {
+        selectedElement.src = document.getElementById('prop-src').value;
+    } else {
+        selectedElement.innerText = document.getElementById('prop-text').value;
     }
+    selectedElement.style.width = document.getElementById('prop-w').value + 'px';
+    selectedElement.style.height = document.getElementById('prop-h').value + 'px';
+    selectedElement.style.zIndex = document.getElementById('prop-z').value;
 };
 
-// 4. DELETE LOGIC (Keydown)
-window.addEventListener('keydown', (e) => {
-    if ((e.key === "Delete" || e.key === "Backspace") && selectedElement) {
-        // Evitar borrar si estamos escribiendo en un input de propiedades
-        if (document.activeElement.tagName === 'INPUT') return;
-        
+// 5. DELETE & EXPORT
+window.onkeydown = (e) => {
+    if ((e.key === "Delete" || e.key === "Backspace") && selectedElement && document.activeElement.tagName !== 'INPUT') {
         selectedElement.remove();
-        selectedElement = null;
         propEditor.style.display = 'none';
         noSelection.style.display = 'block';
     }
-});
-
-// 5. EXPORT SYSTEM
-document.getElementById('export-btn').onclick = () => {
-    const canvasClone = canvas.cloneNode(true);
-    const elements = canvasClone.querySelectorAll('.dropped');
-    
-    elements.forEach(el => {
-        el.classList.remove('dropped', 'selected');
-        el.removeAttribute('onclick');
-        el.style.position = 'absolute'; // Ensure absolute positioning in export
-    });
-
-    const fullHTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>httpgen Export</title>
-    <style>
-        body { margin: 0; background: white; }
-        .exported-canvas { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-    </style>
-</head>
-<body>
-    <div class="exported-canvas">
-        ${canvasClone.innerHTML}
-    </div>
-</body>
-</html>`;
-
-    const blob = new Blob([fullHTML], { type: 'text/html' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'httpgen-design.html';
-    a.click();
 };
 
-canvas.onclick = () => {
-    if (selectedElement) selectedElement.classList.remove('selected');
-    selectedElement = null;
-    propEditor.style.display = 'none';
-    noSelection.style.display = 'block';
+document.getElementById('export-btn').onclick = () => {
+    const clone = canvas.cloneNode(true);
+    clone.querySelectorAll('.resizer').forEach(r => r.remove());
+    clone.querySelectorAll('.dropped').forEach(el => el.classList.remove('dropped', 'selected'));
+    
+    const html = `<!DOCTYPE html><html><head><style>body{margin:0} .canvas{position:relative;width:100vw;height:100vh}</style></head><body><div class="canvas">${clone.innerHTML}</div></body></html>`;
+    const blob = new Blob([html], {type:'text/html'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'index.html';
+    a.click();
 };
 
 loadMenu();
