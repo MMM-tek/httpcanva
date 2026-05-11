@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>httpgen - Web Builder</title>
+    <style>
+        :root { --sidebar-bg: #1e1e1e; --text-color: #ddd; --accent: #0078d4; }
+        body { display: flex; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; height: 100vh; background: #2d2d2d; color: var(--text-color); overflow: hidden; }
+        
+        /* Left Sidebar: Assets & Search */
+        #assets-menu { width: 250px; background: var(--sidebar-bg); display: flex; flex-direction: column; border-right: 1px solid #000; }
+        .search-container { padding: 15px; }
+        #search-input { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: white; border-radius: 4px; box-sizing: border-box; }
+        
+        /* Scrollable Items Area */
+        #items-list { flex-grow: 1; overflow-y: auto; padding: 10px; }
+        .item-card { background: #333; padding: 15px; margin-bottom: 10px; border-radius: 4px; cursor: grab; border: 1px solid transparent; transition: 0.2s; text-align: center; }
+        .item-card:hover { border-color: var(--accent); background: #444; }
+
+        /* Main Workspace (Canvas) */
+        #canvas { flex-grow: 1; background: white; position: relative; overflow: auto; margin: 10px; border-radius: 4px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        .dropped { position: absolute; outline: 1px dashed #ccc; cursor: pointer; min-width: 50px; min-height: 20px; }
+        .selected { outline: 2px solid var(--accent) !important; }
+
+        /* Right Sidebar: Properties */
+        #properties-panel { width: 280px; background: var(--sidebar-bg); padding: 15px; border-left: 1px solid #000; }
+        .prop-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; margin-bottom: 5px; color: #888; }
+        input, select { width: 100%; padding: 8px; background: #333; border: 1px solid #555; color: white; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <aside id="assets-menu">
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Search items (button, input...)">
+        </div>
+        <div id="items-list">
+            <!-- Loaded dynamically from items/items.json -->
+        </div>
+    </aside>
+
+    <main id="canvas"></main>
+
+    <aside id="properties-panel">
+        <h3>Properties</h3>
+        <div id="editor" style="display:none;">
+            <div class="prop-group">
+                <label>ID</label>
+                <input type="text" id="prop-id">
+            </div>
+            <div class="prop-group">
+                <label>Text Content</label>
+                <input type="text" id="prop-text">
+            </div>
+            <div class="prop-group">
+                <label>Background Color</label>
+                <input type="color" id="prop-bg">
+            </div>
+            <button id="save-btn" style="width:100%; padding:10px; background:var(--accent); color:white; border:none; cursor:pointer;">Apply Changes</button>
+        </div>
+        <p id="no-selection">Select an element to edit</p>
+    </aside>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const itemsList = document.getElementById('items-list');
+        const searchInput = document.getElementById('search-input');
+        let selectedElement = null;
+
+        // 1. Fetch main items list
+        async function loadMenu() {
+            try {
+                const response = await fetch('items/items.json');
+                const items = await response.json();
+                renderMenu(items);
+                
+                // Search functionality
+                searchInput.oninput = (e) => {
+                    const term = e.target.value.toLowerCase();
+                    const filtered = items.filter(i => i.name.toLowerCase().includes(term));
+                    renderMenu(filtered);
+                };
+            } catch (e) { console.error("Error loading items.json", e); }
+        }
+
+        function renderMenu(items) {
+            itemsList.innerHTML = '';
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'item-card';
+                div.draggable = true;
+                div.innerText = item.name;
+                div.dataset.json = `items/item-${item.id}.json`;
+                
+                div.ondragstart = (e) => e.dataTransfer.setData('configPath', div.dataset.json);
+                itemsList.appendChild(div);
+            });
+        }
+
+        // 2. Drag & Drop logic
+        canvas.ondragover = (e) => e.preventDefault();
+        canvas.ondrop = async (e) => {
+            e.preventDefault();
+            const configPath = e.dataTransfer.getData('configPath');
+            
+            // Fetch the specific item-name.json
+            const response = await fetch(configPath);
+            const config = await response.json();
+
+            const el = document.createElement(config.tag);
+            el.className = 'dropped';
+            el.innerText = config.defaultText || 'New Element';
+            el.style.left = (e.clientX - canvas.offsetLeft) + 'px';
+            el.style.top = (e.clientY - canvas.offsetTop) + 'px';
+            
+            // Apply custom styles from JSON
+            if(config.styles) Object.assign(el.style, config.styles);
+
+            el.onclick = (event) => {
+                event.stopPropagation();
+                openProperties(el);
+            };
+
+            canvas.appendChild(el);
+        };
+
+        // 3. Properties Logic
+        function openProperties(el) {
+            if(selectedElement) selectedElement.classList.remove('selected');
+            selectedElement = el;
+            el.classList.add('selected');
+
+            document.getElementById('editor').style.display = 'block';
+            document.getElementById('no-selection').style.display = 'none';
+            
+            document.getElementById('prop-id').value = el.id || '';
+            document.getElementById('prop-text').value = el.innerText;
+        }
+
+        document.getElementById('save-btn').onclick = () => {
+            if(selectedElement) {
+                selectedElement.id = document.getElementById('prop-id').value;
+                selectedElement.innerText = document.getElementById('prop-text').value;
+                selectedElement.style.backgroundColor = document.getElementById('prop-bg').value;
+            }
+        };
+
+        // Initialize
+        loadMenu();
+    </script>
+</body>
+</html>
