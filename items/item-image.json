@@ -1,0 +1,11 @@
+{
+  "tag": "img",
+  "defaultText": "",
+  "styles": {
+    "width": "150px",
+    "height": "100px",
+    "background-color": "#eee",
+    "border": "2px dashed #bbb",
+    "content": "url('https://placeholder.com')"
+  }
+}
