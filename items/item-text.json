@@ -1,0 +1,10 @@
+{
+  "tag": "p",
+  "defaultText": "Double click to edit this paragraph text. Lorem ipsum dolor sit amet.",
+  "styles": {
+    "font-size": "16px",
+    "color": "#666",
+    "line-height": "1.5",
+    "max-width": "300px"
+  }
+}
